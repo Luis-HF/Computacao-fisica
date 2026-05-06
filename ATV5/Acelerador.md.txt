@@ -1,0 +1,21 @@
+# Acelerador Eletrônico (Drive-by-Wire) - Simulação Arduino
+
+Este projeto implementa a lógica de controle e o sistema de segurança de um pedal de acelerador eletrônico automotivo (Drive-by-Wire) utilizando Arduino, simulado na plataforma Tinkercad.
+
+## 🚀 Sobre o Projeto
+Em veículos modernos, o pedal do acelerador envia sinais elétricos em vez de puxar um cabo mecânico. Para garantir a segurança e evitar acelerações acidentais catastróficas, o sistema exige **redundância**, utilizando dois potenciômetros simultâneos operando de forma invertida ou proporcional.
+
+Este código lê ambos os sensores e aplica regras estritas de segurança baseadas em sistemas reais:
+- **Detecção de Falha por Divergência:** Se a diferença percentual de aceleração entre os dois sensores ultrapassar 10%, o sistema entra em modo de segurança e acusa erro (`Err` no display).
+- **Detecção de Fio Rompido/Curto:** Se a leitura de voltagem sair dos limites mínimos e máximos calibrados de fábrica, o erro também é acionado.
+
+## ⚙️ Restrições e Técnicas Utilizadas
+O projeto foi desenvolvido sob estritas regras de sistemas embarcados:
+- **Sem funções bloqueantes:** Proibido o uso de *busy-waiting* (laços `while` travando o fluxo principal).
+- **Interrupções do ADC (ISR):** Toda a leitura analógica-digital e a troca de canais do MUX são feitas em segundo plano utilizando interrupções de hardware `ISR(ADC_vect)`.
+- **Sem dependência serial:** A comunicação do estado do acelerador e dos alertas de erro é feita inteiramente via multiplexação de um display de 7 segmentos.
+- **C/C++ nativo:** Manipulação direta de registradores (ADMUX, ADCSRA, PORTB, PORTD) para otimização do microcontrolador ATmega328P.
+
+## 🛠️ Tecnologias
+- C++ (Arduino Framework)
+- Eletrônica Digital (Tinkercad)
