@@ -1,0 +1,15 @@
+void setup(){
+    REG_SET_BIT(GPIO_ENABLE_REG, BIT14 + BIT15);
+}
+void loop(){
+    REG_SET_BIT(GPIO_OUT_W1TS_TEG, BIT15);
+    REG_SET_BIT(GPIO_OUT_W1TS_TEG, BIT14);
+    delay(500);
+
+    REG_SET_BIT(GPIO_OUT_W1TS_TEG, BIT14);
+    REG_SET_BIT(GPIO_OUT_W1TS_TEG, BIT15);
+    delay(500);
+
+    REG_SET_BIT(GPIO_OUT_W1TS_TEG, BIT15);
+    delay(450);
+}
