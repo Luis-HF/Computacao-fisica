@@ -2,22 +2,20 @@
 #define _DEF_PRINCIPAIS_H
 
 #define F_CPU 16000000UL
-
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/pgmspace.h>
+#include <avr/interrupt.h>
+#include <stdbool.h>
 
-
-#define	set_bit(y,bit)	(y|=(1<<bit))
-#define	clr_bit(y,bit)	(y&=~(1<<bit))
-#define cpl_bit(y,bit) 	(y^=(1<<bit))
-#define tst_bit(y,bit) 	(y&(1<<bit))
-
+#define set_bit(y,bit)  (y|=(1<<bit))
+#define clr_bit(y,bit)  (y&=~(1<<bit))
+#define cpl_bit(y,bit)  (y^=(1<<bit))
+#define tst_bit(y,bit)  (y&(1<<bit))
 #endif
 
 #ifndef _LCD_H
 #define _LCD_H
-
 
 #define DADOS_LCD PORTD
 #define nibble_dados  1
@@ -25,357 +23,242 @@
 #define E PB1
 #define RS  PB0
 
-#define tam_vetor	5
+#define tam_vetor 5
 #define conv_ascii  48
 
-#define pulso_enable() 	_delay_us(1); set_bit(CONTR_LCD,E); _delay_us(1); clr_bit(CONTR_LCD,E); _delay_us(45)
+#define pulso_enable()  _delay_us(1); set_bit(CONTR_LCD,E); _delay_us(1); clr_bit(CONTR_LCD,E); _delay_us(45)
 
 void cmd_LCD(unsigned char c, char cd);
-void inic_LCD_4bits();		
+void inic_LCD_4bits();    
 void escreve_LCD(char *c);
 void escreve_LCD_Flash(const char *c);
-
 void ident_num(unsigned int valor, unsigned char *disp);
-
 #endif
 
+// --- HARDWARE DEFINITIONS ---
+#define MOTOR_PIN PD2
+#define HEAT_PIN  PD3 // Aquecedor alocado estritamente no pino 3 (PD3)
+#define BUZZ_PIN  PC1
 
-#define MAX_TEMP 212.f
-#define MIN_TEMP 11.f
-#define MAX_COUNT 1011
-#define MIN_COUNT 79
-
-unsigned int adc_res;
-
-float temperature_read = 0.0;
-
-#define TEMPERATURA_ASSAR_MAX 150
-#define TEMPERATURA_ASSAR_MIN 60
-
-unsigned long cliquePC2 = 0;
-unsigned long cliquePC3 = 0;
-unsigned long cliquePC4 = 0;
-unsigned long cliquePC5 = 0;
-char last_statePC2 = (1 << PC2);
-char last_statePC3 = (1 << PC3);
-char last_statePC4 = (1 << PC4);
-char last_statePC5 = (1 << PC5);
-
-#define num_ADC_average 32
-volatile unsigned int adc_result0[num_ADC_average];
-volatile unsigned int adc_pos0 = num_ADC_average - 1;
+#define MOTORON  PORTD |= (1 << MOTOR_PIN)
+#define MOTOROFF PORTD &= ~(1 << MOTOR_PIN)
+#define HEATON   PORTD |= (1 << HEAT_PIN)
+#define HEATOFF  PORTD &= ~(1 << HEAT_PIN)
+#define BUZZCOM  PORTC ^= (1 << BUZZ_PIN)
+#define BUZZOFF  PORTC &= ~(1 << BUZZ_PIN)
 
 volatile unsigned long my_millis = 0;
-volatile unsigned long tempo_troca;
-volatile unsigned long tempo_ultima_checagem = 0;
-#define MOTORON PORTD |= 1 << PD3
-#define MOTOROFF PORTD &= ~(1 << PD3)
+volatile unsigned int beep_period = 0;
 
-#define HEATON PORTD |= 1 << PD2
-#define HEATOFF PORTD &= ~(1 << PD2)
+// --- ESTRUTURA DE DEBOUNCE PROFISSIONAL ---
+typedef struct {
+    uint8_t pin;
+    uint8_t state;
+    uint8_t last_reading;
+    unsigned long last_debounce_time;
+    bool pressed;
+} Button;
 
-#define BUZZON PORTC |= 1 << PC1
-#define BUZZOFF PORTC &= ~(1 << PC1)
-#define BUZZCOM PORTC ^= (1 << PC1)
-
-#define COUNT2TEMP(c) (MIN_TEMP + (((MAX_TEMP - MIN_TEMP) / (MAX_COUNT - MIN_COUNT)) * (((float)(c)) - MIN_COUNT)))
-
-volatile unsigned int beep_period;
-
-#define BEEP() beep_period = 200
-unsigned char estado = 0;
-int main()
-{
-  cli();
-
-  MOTOROFF;
-  HEATOFF;
-  BUZZON;
-
-  ADMUX = 0;
-  ADCSRA = 1 << ADEN | 1 << ADIE;
-  ADCSRA |= 1 << ADPS2 | 1 << ADPS1 | 1 << ADPS0;
-  DIDR0 = 1 << ADC0D;
-
-  TCCR1A = 0;
-  TCCR1B = (1 << CS11);
-  TCCR1C = 0;
-  OCR1A = 0x07CF;
-  TIMSK1 = 1 << OCIE1A;
-
-  DDRD = 0xFF;
-  DDRB = 1 << PB0 | 1 << PB1;
-  DDRC = 1 << PC1;
-
-  DDRC &= ~(1 << PC2 | 1 << PC3 | 1 << PC4 | 1 << PC5);
-  PORTC |= (1 << PC2 | 1 << PC3 | 1 << PC4 | 1 << PC5);
-
-  sei();
-
-  Serial.begin(115200);
-
-  ADCSRA |= 1 << ADSC;
-
-  inic_LCD_4bits();
-
-  BEEP();
-  volatile unsigned int tempo[3];
-  tempo[0] = 25 * 60 * 1000;
-  tempo[1] = 90 * 60 * 1000;
-  tempo[2] = 40 * 60 * 1000;
-  volatile unsigned int tempo_faltante;
-  char unidade_hora, dezena_minuto, unidade_minuto, dezena_segundo, unidade_segundo;
-  while (1)
-  {
-
-    cmd_LCD(0x80, 0);
-
-    if (estado == 0)
-    {
-
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Sovar    ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
+void update_button(Button *b) {
+    uint8_t reading = (PINC & (1 << b->pin)) ? 1 : 0;
+    
+    if (reading != b->last_reading) {
+        b->last_debounce_time = my_millis;
     }
-    if (estado == 1)
-    {
-
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Crescer  ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
-    }
-    if (estado == 2)
-    {
-
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Assar    ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
-    }
-    if ((estado >= 3) && (estado <= 5))
-      {
-        tempo_faltante = (tempo_troca - my_millis);
-        unidade_segundo = ((tempo_faltante / 1000) % 60) % 10;
-        dezena_segundo = ((tempo_faltante / 1000) % 60) / 10;
-        unidade_minuto = (((tempo_faltante / 1000) / 60) % 60) % 10;
-        dezena_minuto = (((tempo_faltante / 1000) / 60) % 60) / 10;
-        unidade_hora = (((tempo_faltante / 1000) / 60) / 60) % 10;
-
-        cmd_LCD(0x89, 0);
-        cmd_LCD(unidade_hora + '0', 1);
-        cmd_LCD(':', 1);
-        cmd_LCD(dezena_minuto + '0', 1);
-        cmd_LCD(unidade_minuto + '0', 1);
-        cmd_LCD(':', 1);
-        cmd_LCD(dezena_segundo + '0', 1);
-        cmd_LCD(unidade_segundo + '0', 1);
-      }
-    if (estado == 6)
-    {
-      cmd_LCD(0x80, 0);
-      escreve_LCD("      Fim!      ");
-    }
-
-    if (estado <= 2)
-    {
-
-      char leituraPC2 = PINC & (1 << PC2);
-
-      if (leituraPC2 != last_statePC2 && (my_millis - cliquePC2) > 1)
-      {
-        cliquePC2 = my_millis;
-
-        if (leituraPC2 == 0)
-        {
-          tempo[estado] -= 60000;
-        }
-      }
-
-      last_statePC2 = leituraPC2;
-
-      char leituraPC3 = PINC & (1 << PC3);
-
-      if (leituraPC3 != last_statePC3 && (my_millis - cliquePC3) > 1)
-      {
-        cliquePC3 = my_millis;
-
-        if (leituraPC3 == 0)
-        {
-          tempo[estado] += 60000;
-        }
-      }
-
-      last_statePC3 = leituraPC3;
-
-      char leituraPC4 = PINC & (1 << PC4);
-
-      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 1)
-      {
-        cliquePC4 = my_millis;
-
-        if (leituraPC4 == 0)
-        {
-          estado = estado + 1;
-          BEEP();
-          if (estado == 3)
-          {
-            tempo_troca = my_millis + tempo[estado - 3];
-            MOTORON;
-            cmd_LCD(0x80, 0);
-            escreve_LCD("Sovando");
-          }
-        }
-      }
-        last_statePC4 = leituraPC4;
-
-        char leituraPC5 = PINC & (1 << PC5);
-        if (estado != 0)
-          if (leituraPC5 != last_statePC5 && (my_millis - cliquePC5) > 1)
-          {
-            cliquePC5 = my_millis;
-
-            if (leituraPC5 == 0)
-            {
-              estado = estado - 1;
-              BEEP();
+    
+    // Filtro integrador de 50ms
+    if ((my_millis - b->last_debounce_time) > 50) {
+        if (reading != b->state) {
+            b->state = reading;
+            if (b->state == 0) { // Lógica Pull-up (0 = acionado)
+                b->pressed = true;
             }
-          }
-
-        last_statePC5 = leituraPC5;
-      }
-    if (estado == 3)
-    {
-      if (my_millis > tempo_troca)
-      {
-        BEEP();
-        estado = estado + 1;
-        tempo_troca = my_millis + tempo[estado - 3];
-        MOTOROFF;
-        cmd_LCD(0x80, 0);
-        escreve_LCD("Crescendo");
-      }
-    }
-    if (estado == 4)
-    {
-      if (my_millis > tempo_troca)
-      {
-        BEEP();
-        estado = estado + 1;
-        tempo_troca = my_millis + tempo[estado - 3];
-        HEATON;
-        cmd_LCD(0x80, 0);
-        escreve_LCD("Assando");
-      }
-    }
-    if (estado == 5)
-    {
-      if (temperature_read > TEMPERATURA_ASSAR_MAX)
-        HEATOFF;
-      if (temperature_read < TEMPERATURA_ASSAR_MIN)
-        HEATON;
-      if (my_millis > tempo_troca)
-      {
-        BEEP();
-        estado = estado + 1;
-        HEATOFF;
-      }
-    }
-    if (estado == 6)
-    {
-      BEEP();
-
-      char leituraPC4 = PINC & (1 << PC4);
-
-      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 1)
-      {
-        cliquePC4 = my_millis;
-
-        if (leituraPC4 == 0)
-        {
-          estado = 0;
         }
-      }
-
-      last_statePC4 = leituraPC4;
     }
-    if (my_millis - tempo_ultima_checagem > 1000)
-    {
-      tempo_ultima_checagem = my_millis;
-      Serial.print(", ADC0: ");
-      adc_res = 0;
-      for (int i = 0; i < num_ADC_average; i++)
-        adc_res += adc_result0[i];
-      adc_res /= num_ADC_average;
-      Serial.print(adc_res);
-      Serial.print(", ");
-
-      temperature_read = COUNT2TEMP(adc_res);
-      unsigned char digitos[tam_vetor];
-      ident_num(temperature_read, digitos);
-      Serial.print(temperature_read);
-      Serial.println();
-      cmd_LCD(0xC0, 0);
-      escreve_LCD("Temperatura");
-      cmd_LCD(digitos[2], 1);
-      cmd_LCD(digitos[1], 1);
-      cmd_LCD(digitos[0], 1);
-      cmd_LCD('º', 1);
-      cmd_LCD('C', 1);
-    }
-
-  }
-  return 0;
+    b->last_reading = reading;
 }
 
-  ISR(ADC_vect)
-  {
-    adc_result0[adc_pos0++ % num_ADC_average] = ADC;
-    ADCSRA |= 1 << ADSC;
-  }
+// Instâncias dos botões: PC2 (-), PC3 (+), PC4 (Next)
+Button btn_minus = {PC2, 1, 1, 0, false};
+Button btn_plus  = {PC3, 1, 1, 0, false};
+Button btn_next  = {PC4, 1, 1, 0, false};
 
-  ISR(TIMER1_COMPA_vect)
-  {
-    OCR1A += 0x07CF;
-    my_millis += 1;
+unsigned char estado = 0;
+// Tempos padrões em milissegundos: 25 min, 90 min, 40 min
+unsigned long tempo_fase[3] = {25UL * 60 * 1000, 90UL * 60 * 1000, 40UL * 60 * 1000};
+unsigned long tempo_troca = 0;
+unsigned long ultimo_update_lcd = 0;
+unsigned long tempo_beep_fim = 0;
 
-    if (beep_period > 0)
-    {
-      beep_period--;
-      BUZZCOM;
+void print_time(unsigned long ms) {
+    uint8_t h = (ms / 3600000UL) % 24;
+    uint8_t m = (ms / 60000UL) % 60;
+    uint8_t s = (ms / 1000UL) % 60;
+    cmd_LCD(h/10 + '0', 1);
+    cmd_LCD(h%10 + '0', 1);
+    cmd_LCD(':', 1);
+    cmd_LCD(m/10 + '0', 1);
+    cmd_LCD(m%10 + '0', 1);
+    cmd_LCD(':', 1);
+    cmd_LCD(s/10 + '0', 1);
+    cmd_LCD(s%10 + '0', 1);
+}
+
+void exibe_tela_config() {
+    cmd_LCD(0x80, 0); // Linha 1
+    if (estado == 0)      escreve_LCD((char*)"Cfg: Sova       ");
+    else if (estado == 1) escreve_LCD((char*)"Cfg: Descanso   ");
+    else if (estado == 2) escreve_LCD((char*)"Cfg: Assadura   ");
+    
+    cmd_LCD(0xC0, 0); // Linha 2
+    print_time(tempo_fase[estado]);
+    escreve_LCD((char*)" (+/-)  ");
+}
+
+void exibe_tela_execucao(unsigned long faltante) {
+    cmd_LCD(0x80, 0);
+    if (estado == 3)      escreve_LCD((char*)"Exe: Sova       ");
+    else if (estado == 4) escreve_LCD((char*)"Exe: Descanso   ");
+    else if (estado == 5) escreve_LCD((char*)"Exe: Assadura   ");
+
+    cmd_LCD(0xC0, 0);
+    print_time(faltante);
+    
+    if (estado == 5) escreve_LCD((char*)" T:150C ");
+    else             escreve_LCD((char*)" T:25C  ");
+}
+
+int main() {
+    cli(); // Desabilita interrupções globais durante o setup
+
+    // I/O Direção e Estado Inicial
+    DDRD |= (1 << MOTOR_PIN) | (1 << HEAT_PIN);
+    MOTOROFF;
+    HEATOFF;
+
+    DDRC |= (1 << BUZZ_PIN);
+    BUZZOFF;
+    
+    DDRC &= ~((1 << PC2) | (1 << PC3) | (1 << PC4)); // Configura como entrada
+    PORTC |= (1 << PC2) | (1 << PC3) | (1 << PC4);   // Ativa resistores Pull-up
+
+    DDRB |= (1 << PB0) | (1 << PB1); // Pinos de controle LCD
+
+    // Configuração de Hardware do Timer1 para base de tempo 1ms (Modo CTC)
+    TCCR1A = 0;
+    TCCR1B = (1 << WGM12) | (1 << CS11); // Modo CTC, Prescaler 8
+    OCR1A = 1999;                        // (16MHz / 8 / 1000Hz) - 1
+    TIMSK1 = (1 << OCIE1A);              // Habilita interrupção por comparação
+
+    sei(); // Habilita interrupções globais
+
+    inic_LCD_4bits();
+    beep_period = 200; // Aciona o bip curto inicial exigido
+
+    while (1) {
+        // Atualiza leitura de botões continuamente
+        update_button(&btn_minus);
+        update_button(&btn_plus);
+        update_button(&btn_next);
+
+        // ESTADOS DE CONFIGURAÇÃO (0, 1 e 2)
+        if (estado <= 2) {
+            if (btn_minus.pressed) {
+                btn_minus.pressed = false;
+                if (tempo_fase[estado] >= 300000UL) tempo_fase[estado] -= 300000UL;
+                else tempo_fase[estado] = 0;
+                beep_period = 50;
+            }
+            if (btn_plus.pressed) {
+                btn_plus.pressed = false;
+                tempo_fase[estado] += 300000UL;
+                beep_period = 50;
+            }
+            if (btn_next.pressed) {
+                btn_next.pressed = false;
+                estado++;
+                beep_period = 100;
+                
+                // Transição para execução da primeira fase (Sova)
+                if (estado == 3) {
+                    tempo_troca = my_millis + tempo_fase[0];
+                    MOTORON;
+                    HEATOFF;
+                }
+            }
+            
+            // Taxa de atualização do display (throttle) de 200ms
+            if (my_millis - ultimo_update_lcd > 200) {
+                exibe_tela_config();
+                ultimo_update_lcd = my_millis;
+            }
+        } 
+        // ESTADOS DE EXECUÇÃO (3, 4 e 5)
+        else if (estado >= 3 && estado <= 5) {
+            unsigned long tempo_faltante = 0;
+            
+            if (tempo_troca > my_millis) {
+                tempo_faltante = tempo_troca - my_millis;
+            } else {
+                // Fim do tempo da fase atual, executa transição
+                estado++;
+                beep_period = 200;
+                
+                if (estado == 4) { // Início Descanso
+                    MOTOROFF;
+                    HEATOFF;
+                    tempo_troca = my_millis + tempo_fase[1];
+                } else if (estado == 5) { // Início Assadura
+                    MOTOROFF;
+                    HEATON;
+                    tempo_troca = my_millis + tempo_fase[2];
+                } else if (estado == 6) { // Fim do processo
+                    MOTOROFF;
+                    HEATOFF;
+                }
+            }
+            
+            if (my_millis - ultimo_update_lcd > 200) {
+                exibe_tela_execucao(tempo_faltante);
+                ultimo_update_lcd = my_millis;
+            }
+        } 
+        // ESTADO DE CONCLUSÃO (6)
+        else if (estado == 6) {
+            if (my_millis - ultimo_update_lcd > 200) {
+                cmd_LCD(0x80, 0);
+                escreve_LCD((char*)"      Fim!      ");
+                cmd_LCD(0xC0, 0);
+                escreve_LCD((char*)" Retire a Massa ");
+                ultimo_update_lcd = my_millis;
+            }
+            
+            // Bip rápido intermitente de alerta
+            if (my_millis - tempo_beep_fim > 500) {
+                beep_period = 100;
+                tempo_beep_fim = my_millis;
+            }
+
+            // Permite reiniciar a máquina
+            if (btn_next.pressed) {
+                btn_next.pressed = false;
+                estado = 0;
+                BUZZOFF;
+            }
+        }
     }
-  }
+    return 0;
+}
+
+// Rotina de Serviço de Interrupção do Timer1 (Disparada a cada 1ms)
+ISR(TIMER1_COMPA_vect) {
+    my_millis++;
+    
+    // Tratamento de hardware não-bloqueante para o buzzer
+    if (beep_period > 0) {
+        beep_period--;
+        BUZZCOM; 
+    } else {
+        BUZZOFF;
+    }
+}
