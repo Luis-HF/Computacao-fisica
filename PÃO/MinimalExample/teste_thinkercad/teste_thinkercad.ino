@@ -35,7 +35,7 @@ void escreve_LCD_Flash(const char *c);
 void ident_num(unsigned int valor, unsigned char *disp);
 #endif
 
-// --- HARDWARE DEFINITIONS ---
+// Definição dos pinos do aquecedor, motor e buzzer para ligar e desligar
 #define MOTOR_PIN PD2
 #define HEAT_PIN  PD3 // Aquecedor alocado estritamente no pino 3 (PD3)
 #define BUZZ_PIN  PC1
@@ -50,7 +50,7 @@ void ident_num(unsigned int valor, unsigned char *disp);
 volatile unsigned long my_millis = 0;
 volatile unsigned int beep_period = 0;
 
-// --- ESTRUTURA DE DEBOUNCE PROFISSIONAL ---
+//Debaunce razoável--
 typedef struct {
     uint8_t pin;
     uint8_t state;
@@ -66,7 +66,7 @@ void update_button(Button *b) {
         b->last_debounce_time = my_millis;
     }
     
-    // Filtro integrador de 50ms
+    //50ms
     if ((my_millis - b->last_debounce_time) > 50) {
         if (reading != b->state) {
             b->state = reading;
