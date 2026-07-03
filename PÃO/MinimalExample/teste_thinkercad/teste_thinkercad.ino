@@ -7,7 +7,6 @@
 #include <util/delay.h>
 #include <avr/pgmspace.h>
 
-
 #define	set_bit(y,bit)	(y|=(1<<bit))
 #define	clr_bit(y,bit)	(y&=~(1<<bit))
 #define cpl_bit(y,bit) 	(y^=(1<<bit))
@@ -17,7 +16,6 @@
 
 #ifndef _LCD_H
 #define _LCD_H
-
 
 #define DADOS_LCD PORTD
 #define nibble_dados  1
@@ -34,11 +32,9 @@ void cmd_LCD(unsigned char c, char cd);
 void inic_LCD_4bits();		
 void escreve_LCD(char *c);
 void escreve_LCD_Flash(const char *c);
-
 void ident_num(unsigned int valor, unsigned char *disp);
 
 #endif
-
 
 #define MAX_TEMP 212.f
 #define MIN_TEMP 11.f
@@ -46,7 +42,6 @@ void ident_num(unsigned int valor, unsigned char *disp);
 #define MIN_COUNT 79
 
 unsigned int adc_res;
-
 float temperature_read = 0.0;
 
 #define TEMPERATURA_ASSAR_MAX 150
@@ -56,6 +51,7 @@ unsigned long cliquePC2 = 0;
 unsigned long cliquePC3 = 0;
 unsigned long cliquePC4 = 0;
 unsigned long cliquePC5 = 0;
+
 char last_statePC2 = (1 << PC2);
 char last_statePC3 = (1 << PC3);
 char last_statePC4 = (1 << PC4);
@@ -66,8 +62,10 @@ volatile unsigned int adc_result0[num_ADC_average];
 volatile unsigned int adc_pos0 = num_ADC_average - 1;
 
 volatile unsigned long my_millis = 0;
-volatile unsigned long tempo_troca;
-volatile unsigned long tempo_ultima_checagem = 0;
+unsigned long tempo_troca;
+unsigned long tempo_ultima_checagem = 0;
+unsigned long tempo_ultimo_refresh_lcd = 0;
+
 #define MOTORON PORTD |= 1 << PD2
 #define MOTOROFF PORTD &= ~(1 << PD2)
 
@@ -81,9 +79,24 @@ volatile unsigned long tempo_ultima_checagem = 0;
 #define COUNT2TEMP(c) (MIN_TEMP + (((MAX_TEMP - MIN_TEMP) / (MAX_COUNT - MIN_COUNT)) * (((float)(c)) - MIN_COUNT)))
 
 volatile unsigned int beep_period;
-
 #define BEEP() beep_period = 200
 unsigned char estado = 0;
+
+void exibe_tempo_lcd(unsigned long milissegundos)
+{
+  unsigned char horas = milissegundos / 3600000UL;
+  unsigned char minutos = (milissegundos / 60000UL) % 60;
+  unsigned char segundos = (milissegundos / 1000UL) % 60;
+
+  cmd_LCD(horas + '0', 1);
+  cmd_LCD(':', 1);
+  cmd_LCD((minutos / 10) + '0', 1);
+  cmd_LCD((minutos % 10) + '0', 1);
+  cmd_LCD(':', 1);
+  cmd_LCD((segundos / 10) + '0', 1);
+  cmd_LCD((segundos % 10) + '0', 1);
+}
+
 int main()
 {
   cli();
@@ -98,9 +111,9 @@ int main()
   DIDR0 = 1 << ADC0D;
 
   TCCR1A = 0;
-  TCCR1B = (1 << CS11);
+  TCCR1B = (1 << WGM12) | (1 << CS11); 
   TCCR1C = 0;
-  OCR1A = 0x07CF;
+  OCR1A = 1999;                        
   TIMSK1 = 1 << OCIE1A;
 
   DDRD = 0xFF;
@@ -113,201 +126,157 @@ int main()
   sei();
 
   Serial.begin(115200);
-
   ADCSRA |= 1 << ADSC;
 
   inic_LCD_4bits();
 
   BEEP();
-  volatile unsigned int tempo[3];
-  tempo[0] = 25 * 60 * 1000;
-  tempo[1] = 90 * 60 * 1000;
-  tempo[2] = 40 * 60 * 1000;
-  volatile unsigned int tempo_faltante;
-  char unidade_hora, dezena_minuto, unidade_minuto, dezena_segundo, unidade_segundo;
+
+  unsigned long tempo[3];
+  tempo[0] = 25UL * 60UL * 1000UL; 
+  tempo[1] = 90UL * 60UL * 1000UL; 
+  tempo[2] = 40UL * 60UL * 1000UL; 
+  
+  unsigned long tempo_faltante;
+
   while (1)
   {
-
-    cmd_LCD(0x80, 0);
-
-    if (estado == 0)
+    if (my_millis - tempo_ultimo_refresh_lcd > 200)
     {
+      tempo_ultimo_refresh_lcd = my_millis;
 
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Sovar    ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
-    }
-    if (estado == 1)
-    {
-
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Crescer  ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
-    }
-    if (estado == 2)
-    {
-
-      unidade_segundo = ((tempo[estado] / 1000) % 60) % 10;
-      dezena_segundo = ((tempo[estado] / 1000) % 60) / 10;
-      unidade_minuto = (((tempo[estado] / 1000) / 60) % 60) % 10;
-      dezena_minuto = (((tempo[estado] / 1000) / 60) % 60) / 10;
-      unidade_hora = (((tempo[estado] / 1000) / 60) / 60) % 10;
-
-      escreve_LCD("Assar    ");
-          cmd_LCD(0x89, 0);
-      cmd_LCD(unidade_hora + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_minuto + '0', 1);
-      cmd_LCD(unidade_minuto + '0', 1);
-      cmd_LCD(':', 1);
-      cmd_LCD(dezena_segundo + '0', 1);
-      cmd_LCD(unidade_segundo + '0', 1);
-    }
-    if ((estado >= 3) && (estado <= 5))
+      if (estado == 0)
       {
-        tempo_faltante = (tempo_troca - my_millis);
-        unidade_segundo = ((tempo_faltante / 1000) % 60) % 10;
-        dezena_segundo = ((tempo_faltante / 1000) % 60) / 10;
-        unidade_minuto = (((tempo_faltante / 1000) / 60) % 60) % 10;
-        dezena_minuto = (((tempo_faltante / 1000) / 60) % 60) / 10;
-        unidade_hora = (((tempo_faltante / 1000) / 60) / 60) % 10;
-
+        cmd_LCD(0x80, 0);
+        escreve_LCD("Sova     ");
         cmd_LCD(0x89, 0);
-        cmd_LCD(unidade_hora + '0', 1);
-        cmd_LCD(':', 1);
-        cmd_LCD(dezena_minuto + '0', 1);
-        cmd_LCD(unidade_minuto + '0', 1);
-        cmd_LCD(':', 1);
-        cmd_LCD(dezena_segundo + '0', 1);
-        cmd_LCD(unidade_segundo + '0', 1);
+        exibe_tempo_lcd(tempo[estado]);
       }
-    if (estado == 6)
-    {
-      cmd_LCD(0x80, 0);
-      escreve_LCD("      Fim!      ");
+      else if (estado == 1)
+      {
+        cmd_LCD(0x80, 0);
+        escreve_LCD("Descanso ");
+        cmd_LCD(0x89, 0);
+        exibe_tempo_lcd(tempo[estado]);
+      }
+      else if (estado == 2)
+      {
+        cmd_LCD(0x80, 0);
+        escreve_LCD("Assadura ");
+        cmd_LCD(0x89, 0);
+        exibe_tempo_lcd(tempo[estado]);
+      }
+      else if ((estado >= 3) && (estado <= 5))
+      {
+        if (tempo_troca > my_millis) {
+          tempo_faltante = (tempo_troca - my_millis);
+        } else {
+          tempo_faltante = 0;
+        }
+        cmd_LCD(0x89, 0);
+        exibe_tempo_lcd(tempo_faltante);
+      }
+      else if (estado == 6)
+      {
+        cmd_LCD(0x80, 0);
+        escreve_LCD("      Fim!      ");
+      }
     }
 
     if (estado <= 2)
     {
-
+      // Botão Decremento (PC2)
       char leituraPC2 = PINC & (1 << PC2);
-
-      if (leituraPC2 != last_statePC2 && (my_millis - cliquePC2) > 1)
+      if (leituraPC2 == 0 && last_statePC2 != 0 && (my_millis - cliquePC2) > 250)
       {
         cliquePC2 = my_millis;
-
-        if (leituraPC2 == 0)
-        {
-          tempo[estado] -= 60000;
+        BEEP();
+        if (tempo[estado] > 300000UL) {
+          tempo[estado] -= 300000UL; 
+        } else if (tempo[estado] == 300000UL) {
+          tempo[estado] = 10000UL; // Transição de 5 minutos direto para 10 segundos
+        } else {
+          tempo[estado] = 10000UL; // Trava o mínimo absoluto em 10 segundos
         }
       }
-
       last_statePC2 = leituraPC2;
 
+      // Botão Incremento (PC3)
       char leituraPC3 = PINC & (1 << PC3);
-
-      if (leituraPC3 != last_statePC3 && (my_millis - cliquePC3) > 1)
+      if (leituraPC3 == 0 && last_statePC3 != 0 && (my_millis - cliquePC3) > 250)
       {
         cliquePC3 = my_millis;
-
-        if (leituraPC3 == 0)
-        {
-          tempo[estado] += 60000;
+        BEEP();
+        if (tempo[estado] == 10000UL) {
+          tempo[estado] = 300000UL; // Retorna imediatamente para 5 minutos
+        } else {
+          tempo[estado] += 300000UL; 
         }
       }
-
       last_statePC3 = leituraPC3;
 
+      // Botão Avançar Estado (PC4)
       char leituraPC4 = PINC & (1 << PC4);
-
-      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 1)
+      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
       {
         cliquePC4 = my_millis;
-
-        if (leituraPC4 == 0)
+        BEEP();
+        estado = estado + 1;
+        if (estado == 3)
         {
-          estado = estado + 1;
-          BEEP();
-          if (estado == 3)
-          {
-            tempo_troca = my_millis + tempo[estado - 3];
-            MOTORON;
-            cmd_LCD(0x80, 0);
-            escreve_LCD("Sovando");
-          }
+          tempo_troca = my_millis + tempo[0];
+          MOTORON;
+          cmd_LCD(0x80, 0);
+          escreve_LCD("Sovando  ");
         }
       }
-        last_statePC4 = leituraPC4;
+      last_statePC4 = leituraPC4;
 
-        char leituraPC5 = PINC & (1 << PC5);
-        if (estado != 0)
-          if (leituraPC5 != last_statePC5 && (my_millis - cliquePC5) > 1)
-          {
-            cliquePC5 = my_millis;
-
-            if (leituraPC5 == 0)
-            {
-              estado = estado - 1;
-              BEEP();
-            }
-          }
-
-        last_statePC5 = leituraPC5;
+      // Botão Voltar Estado (PC5)
+      char leituraPC5 = PINC & (1 << PC5);
+      if (estado != 0)
+      {
+        if (leituraPC5 == 0 && last_statePC5 != 0 && (my_millis - cliquePC5) > 250)
+        {
+          cliquePC5 = my_millis;
+          BEEP();
+          estado = estado - 1;
+        }
       }
+      last_statePC5 = leituraPC5;
+    }
+
     if (estado == 3)
     {
       if (my_millis > tempo_troca)
       {
         BEEP();
         estado = estado + 1;
-        tempo_troca = my_millis + tempo[estado - 3];
+        tempo_troca = my_millis + tempo[1];
         MOTOROFF;
         cmd_LCD(0x80, 0);
         escreve_LCD("Crescendo");
       }
     }
+    
     if (estado == 4)
     {
       if (my_millis > tempo_troca)
       {
         BEEP();
         estado = estado + 1;
-        tempo_troca = my_millis + tempo[estado - 3];
+        tempo_troca = my_millis + tempo[2];
         HEATON;
         cmd_LCD(0x80, 0);
-        escreve_LCD("Assando");
+        escreve_LCD("Assando  ");
       }
     }
+    
     if (estado == 5)
     {
-      if (temperature_read > TEMPERATURA_ASSAR_MAX)
-        HEATOFF;
-      if (temperature_read < TEMPERATURA_ASSAR_MIN)
-        HEATON;
+      if (temperature_read > TEMPERATURA_ASSAR_MAX)  HEATOFF;
+      if (temperature_read < TEMPERATURA_ASSAR_MIN)  HEATON;
+      
       if (my_millis > tempo_troca)
       {
         BEEP();
@@ -315,67 +284,61 @@ int main()
         HEATOFF;
       }
     }
+    
     if (estado == 6)
     {
       BEEP();
-
       char leituraPC4 = PINC & (1 << PC4);
-
-      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 1)
+      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
       {
         cliquePC4 = my_millis;
-
-        if (leituraPC4 == 0)
-        {
-          estado = 0;
-        }
+        estado = 0;
       }
-
       last_statePC4 = leituraPC4;
     }
+
     if (my_millis - tempo_ultima_checagem > 1000)
     {
       tempo_ultima_checagem = my_millis;
-      Serial.print(", ADC0: ");
       adc_res = 0;
-      for (int i = 0; i < num_ADC_average; i++)
+      for (int i = 0; i < num_ADC_average; i++) {
         adc_res += adc_result0[i];
+      }
       adc_res /= num_ADC_average;
-      Serial.print(adc_res);
-      Serial.print(", ");
 
       temperature_read = COUNT2TEMP(adc_res);
       unsigned char digitos[tam_vetor];
-      ident_num(temperature_read, digitos);
-      Serial.print(temperature_read);
-      Serial.println();
+      ident_num((unsigned int)temperature_read, digitos);
+      
       cmd_LCD(0xC0, 0);
-      escreve_LCD("Temperatura");
+      escreve_LCD("Temp: ");
       cmd_LCD(digitos[2], 1);
       cmd_LCD(digitos[1], 1);
       cmd_LCD(digitos[0], 1);
-      cmd_LCD('º', 1);
+      cmd_LCD(0xDF, 1); 
       cmd_LCD('C', 1);
+      escreve_LCD("    ");
     }
-
   }
   return 0;
 }
 
-  ISR(ADC_vect)
-  {
-    adc_result0[adc_pos0++ % num_ADC_average] = ADC;
-    ADCSRA |= 1 << ADSC;
-  }
+ISR(ADC_vect)
+{
+  adc_result0[adc_pos0++ % num_ADC_average] = ADC;
+  ADCSRA |= 1 << ADSC;
+}
 
-  ISR(TIMER1_COMPA_vect)
+ISR(TIMER1_COMPA_vect)
+{
+  my_millis += 1;
+  if (beep_period > 0)
   {
-    OCR1A += 0x07CF;
-    my_millis += 1;
-
-    if (beep_period > 0)
-    {
-      beep_period--;
-      BUZZCOM;
-    }
+    beep_period--;
+    BUZZCOM;
   }
+  else
+  {
+    BUZZOFF;
+  }
+}
