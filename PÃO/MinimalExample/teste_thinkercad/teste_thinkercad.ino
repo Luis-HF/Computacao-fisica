@@ -163,7 +163,7 @@ int main()
     if (estado <= 2)
     {
       char leituraPC2 = PINC & (1 << PC2);
-      if (leituraPC2 == 0 && last_statePC2 != 0 && (my_millis - cliquePC2) > 250)
+      if (leituraPC2 == 0 && last_statePC2 != 0 && (my_millis - cliquePC2) > 150)
       {
         cliquePC2 = my_millis;
         BEEP();
@@ -178,7 +178,7 @@ int main()
       last_statePC2 = leituraPC2;
 
       char leituraPC3 = PINC & (1 << PC3);
-      if (leituraPC3 == 0 && last_statePC3 != 0 && (my_millis - cliquePC3) > 250)
+      if (leituraPC3 == 0 && last_statePC3 != 0 && (my_millis - cliquePC3) > 150)
       {
         cliquePC3 = my_millis;
         BEEP();
@@ -191,7 +191,7 @@ int main()
       last_statePC3 = leituraPC3;
 
       char leituraPC4 = PINC & (1 << PC4);
-      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
+      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 150)
       {
         cliquePC4 = my_millis;
         BEEP();
@@ -209,7 +209,7 @@ int main()
       char leituraPC5 = PINC & (1 << PC5);
       if (estado != 0)
       {
-        if (leituraPC5 == 0 && last_statePC5 != 0 && (my_millis - cliquePC5) > 250)
+        if (leituraPC5 == 0 && last_statePC5 != 0 && (my_millis - cliquePC5) > 150)
         {
           cliquePC5 = my_millis;
           BEEP();
@@ -258,31 +258,28 @@ int main()
     if (estado == 6)
     {
       char leituraPC4 = PINC & (1 << PC4);
-      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
+      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 150)
       {
         cliquePC4 = my_millis;
         estado = 0;
         
-        // Força sincronização imediata da tela para extinguir a mensagem "Belo Pao"
         tempo_ultimo_refresh_lcd = my_millis - 200;
         tempo_ultima_checagem = my_millis - 1000;
       }
       last_statePC4 = leituraPC4;
     }
 
-    // Rotina de exibição da temperatura na linha inferior
     if (my_millis - tempo_ultima_checagem > 1000)
     {
       tempo_ultima_checagem = my_millis;
       
-      // Bloqueia a exibição da temperatura se a máquina estiver no estágio final
       if (estado != 6) 
       {
         cmd_LCD(0xC0, 0);
         escreve_LCD((char*)"Temp: 67");
         cmd_LCD(0xDF, 1); 
         cmd_LCD('C', 1);
-        escreve_LCD((char*)"      "); // Preenche os 6 espaços restantes para fechar as 16 colunas
+        escreve_LCD((char*)"      "); 
       }
     }
   }
