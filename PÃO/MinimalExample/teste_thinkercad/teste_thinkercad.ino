@@ -68,11 +68,11 @@ volatile unsigned int adc_pos0 = num_ADC_average - 1;
 volatile unsigned long my_millis = 0;
 volatile unsigned long tempo_troca;
 volatile unsigned long tempo_ultima_checagem = 0;
-#define MOTORON PORTD |= 1 << PD3
-#define MOTOROFF PORTD &= ~(1 << PD3)
+#define MOTORON PORTD |= 1 << PD2
+#define MOTOROFF PORTD &= ~(1 << PD2)
 
-#define HEATON PORTD |= 1 << PD2
-#define HEATOFF PORTD &= ~(1 << PD2)
+#define HEATON PORTD |= 1 << PD3
+#define HEATOFF PORTD &= ~(1 << PD3)
 
 #define BUZZON PORTC |= 1 << PC1
 #define BUZZOFF PORTC &= ~(1 << PC1)
