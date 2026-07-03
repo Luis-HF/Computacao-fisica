@@ -194,9 +194,9 @@ int main()
         if (tempo[estado] > 300000UL) {
           tempo[estado] -= 300000UL; 
         } else if (tempo[estado] == 300000UL) {
-          tempo[estado] = 10000UL; // Transição de 5 minutos direto para 10 segundos
+          tempo[estado] = 10000UL; 
         } else {
-          tempo[estado] = 10000UL; // Trava o mínimo absoluto em 10 segundos
+          tempo[estado] = 10000UL; 
         }
       }
       last_statePC2 = leituraPC2;
@@ -208,7 +208,7 @@ int main()
         cliquePC3 = my_millis;
         BEEP();
         if (tempo[estado] == 10000UL) {
-          tempo[estado] = 300000UL; // Retorna imediatamente para 5 minutos
+          tempo[estado] = 300000UL; 
         } else {
           tempo[estado] += 300000UL; 
         }
@@ -274,9 +274,7 @@ int main()
     
     if (estado == 5)
     {
-      if (temperature_read > TEMPERATURA_ASSAR_MAX)  HEATOFF;
-      if (temperature_read < TEMPERATURA_ASSAR_MIN)  HEATON;
-      
+      // Malha de feedback analógico removida para manter o atuador travado em nível alto
       if (my_millis > tempo_troca)
       {
         BEEP();
@@ -287,7 +285,6 @@ int main()
     
     if (estado == 6)
     {
-      BEEP();
       char leituraPC4 = PINC & (1 << PC4);
       if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
       {
