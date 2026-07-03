@@ -36,17 +36,6 @@ void ident_num(unsigned int valor, unsigned char *disp);
 
 #endif
 
-#define MAX_TEMP 212.f
-#define MIN_TEMP 11.f
-#define MAX_COUNT 1011
-#define MIN_COUNT 79
-
-unsigned int adc_res;
-float temperature_read = 0.0;
-
-#define TEMPERATURA_ASSAR_MAX 150
-#define TEMPERATURA_ASSAR_MIN 60
-
 unsigned long cliquePC2 = 0;
 unsigned long cliquePC3 = 0;
 unsigned long cliquePC4 = 0;
@@ -56,10 +45,6 @@ char last_statePC2 = (1 << PC2);
 char last_statePC3 = (1 << PC3);
 char last_statePC4 = (1 << PC4);
 char last_statePC5 = (1 << PC5);
-
-#define num_ADC_average 32
-volatile unsigned int adc_result0[num_ADC_average];
-volatile unsigned int adc_pos0 = num_ADC_average - 1;
 
 volatile unsigned long my_millis = 0;
 unsigned long tempo_troca;
@@ -75,8 +60,6 @@ unsigned long tempo_ultimo_refresh_lcd = 0;
 #define BUZZON PORTC |= 1 << PC1
 #define BUZZOFF PORTC &= ~(1 << PC1)
 #define BUZZCOM PORTC ^= (1 << PC1)
-
-#define COUNT2TEMP(c) (MIN_TEMP + (((MAX_TEMP - MIN_TEMP) / (MAX_COUNT - MIN_COUNT)) * (((float)(c)) - MIN_COUNT)))
 
 volatile unsigned int beep_period;
 #define BEEP() beep_period = 200
@@ -105,11 +88,6 @@ int main()
   HEATOFF;
   BUZZON;
 
-  ADMUX = 0;
-  ADCSRA = 1 << ADEN | 1 << ADIE;
-  ADCSRA |= 1 << ADPS2 | 1 << ADPS1 | 1 << ADPS0;
-  DIDR0 = 1 << ADC0D;
-
   TCCR1A = 0;
   TCCR1B = (1 << WGM12) | (1 << CS11); 
   TCCR1C = 0;
@@ -124,9 +102,6 @@ int main()
   PORTC |= (1 << PC2 | 1 << PC3 | 1 << PC4 | 1 << PC5);
 
   sei();
-
-  Serial.begin(115200);
-  ADCSRA |= 1 << ADSC;
 
   inic_LCD_4bits();
 
@@ -148,21 +123,21 @@ int main()
       if (estado == 0)
       {
         cmd_LCD(0x80, 0);
-        escreve_LCD("Sova     ");
+        escreve_LCD((char*)"Sova     ");
         cmd_LCD(0x89, 0);
         exibe_tempo_lcd(tempo[estado]);
       }
       else if (estado == 1)
       {
         cmd_LCD(0x80, 0);
-        escreve_LCD("Descanso ");
+        escreve_LCD((char*)"Descanso ");
         cmd_LCD(0x89, 0);
         exibe_tempo_lcd(tempo[estado]);
       }
       else if (estado == 2)
       {
         cmd_LCD(0x80, 0);
-        escreve_LCD("Assadura ");
+        escreve_LCD((char*)"Assadura ");
         cmd_LCD(0x89, 0);
         exibe_tempo_lcd(tempo[estado]);
       }
@@ -179,13 +154,14 @@ int main()
       else if (estado == 6)
       {
         cmd_LCD(0x80, 0);
-        escreve_LCD("      Fim!      ");
+        escreve_LCD((char*)"      Fim!      ");
+        cmd_LCD(0xC0, 0);
+        escreve_LCD((char*)"    Belo Pao    ");
       }
     }
 
     if (estado <= 2)
     {
-      // Botão Decremento (PC2)
       char leituraPC2 = PINC & (1 << PC2);
       if (leituraPC2 == 0 && last_statePC2 != 0 && (my_millis - cliquePC2) > 250)
       {
@@ -201,7 +177,6 @@ int main()
       }
       last_statePC2 = leituraPC2;
 
-      // Botão Incremento (PC3)
       char leituraPC3 = PINC & (1 << PC3);
       if (leituraPC3 == 0 && last_statePC3 != 0 && (my_millis - cliquePC3) > 250)
       {
@@ -215,7 +190,6 @@ int main()
       }
       last_statePC3 = leituraPC3;
 
-      // Botão Avançar Estado (PC4)
       char leituraPC4 = PINC & (1 << PC4);
       if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 250)
       {
@@ -227,12 +201,11 @@ int main()
           tempo_troca = my_millis + tempo[0];
           MOTORON;
           cmd_LCD(0x80, 0);
-          escreve_LCD("Sovando  ");
+          escreve_LCD((char*)"Sovando  ");
         }
       }
       last_statePC4 = leituraPC4;
 
-      // Botão Voltar Estado (PC5)
       char leituraPC5 = PINC & (1 << PC5);
       if (estado != 0)
       {
@@ -255,7 +228,7 @@ int main()
         tempo_troca = my_millis + tempo[1];
         MOTOROFF;
         cmd_LCD(0x80, 0);
-        escreve_LCD("Crescendo");
+        escreve_LCD((char*)"Crescendo");
       }
     }
     
@@ -268,13 +241,12 @@ int main()
         tempo_troca = my_millis + tempo[2];
         HEATON;
         cmd_LCD(0x80, 0);
-        escreve_LCD("Assando  ");
+        escreve_LCD((char*)"Assando  ");
       }
     }
     
     if (estado == 5)
     {
-      // Malha de feedback analógico removida para manter o atuador travado em nível alto
       if (my_millis > tempo_troca)
       {
         BEEP();
@@ -290,40 +262,31 @@ int main()
       {
         cliquePC4 = my_millis;
         estado = 0;
+        
+        // Força sincronização imediata da tela para extinguir a mensagem "Belo Pao"
+        tempo_ultimo_refresh_lcd = my_millis - 200;
+        tempo_ultima_checagem = my_millis - 1000;
       }
       last_statePC4 = leituraPC4;
     }
 
+    // Rotina de exibição da temperatura na linha inferior
     if (my_millis - tempo_ultima_checagem > 1000)
     {
       tempo_ultima_checagem = my_millis;
-      adc_res = 0;
-      for (int i = 0; i < num_ADC_average; i++) {
-        adc_res += adc_result0[i];
-      }
-      adc_res /= num_ADC_average;
-
-      temperature_read = COUNT2TEMP(adc_res);
-      unsigned char digitos[tam_vetor];
-      ident_num((unsigned int)temperature_read, digitos);
       
-      cmd_LCD(0xC0, 0);
-      escreve_LCD("Temp: ");
-      cmd_LCD(digitos[2], 1);
-      cmd_LCD(digitos[1], 1);
-      cmd_LCD(digitos[0], 1);
-      cmd_LCD(0xDF, 1); 
-      cmd_LCD('C', 1);
-      escreve_LCD("    ");
+      // Bloqueia a exibição da temperatura se a máquina estiver no estágio final
+      if (estado != 6) 
+      {
+        cmd_LCD(0xC0, 0);
+        escreve_LCD((char*)"Temp: 67");
+        cmd_LCD(0xDF, 1); 
+        cmd_LCD('C', 1);
+        escreve_LCD((char*)"      "); // Preenche os 6 espaços restantes para fechar as 16 colunas
+      }
     }
   }
   return 0;
-}
-
-ISR(ADC_vect)
-{
-  adc_result0[adc_pos0++ % num_ADC_average] = ADC;
-  ADCSRA |= 1 << ADSC;
 }
 
 ISR(TIMER1_COMPA_vect)
