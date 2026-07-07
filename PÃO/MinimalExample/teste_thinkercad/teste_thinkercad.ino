@@ -7,10 +7,10 @@
 #include <util/delay.h>
 #include <avr/pgmspace.h>
 
-#define	set_bit(y,bit)	(y|=(1<<bit))
-#define	clr_bit(y,bit)	(y&=~(1<<bit))
-#define cpl_bit(y,bit) 	(y^=(1<<bit))
-#define tst_bit(y,bit) 	(y&(1<<bit))
+#define set_bit(y,bit)  (y|=(1<<bit))
+#define clr_bit(y,bit)  (y&=~(1<<bit))
+#define cpl_bit(y,bit)  (y^=(1<<bit))
+#define tst_bit(y,bit)  (y&(1<<bit))
 
 #endif
 
@@ -23,13 +23,13 @@
 #define E PB1
 #define RS  PB0
 
-#define tam_vetor	5
+#define tam_vetor 5
 #define conv_ascii  48
 
-#define pulso_enable() 	_delay_us(1); set_bit(CONTR_LCD,E); _delay_us(1); clr_bit(CONTR_LCD,E); _delay_us(45)
+#define pulso_enable()  _delay_us(1); set_bit(CONTR_LCD,E); _delay_us(1); clr_bit(CONTR_LCD,E); _delay_us(45)
 
 void cmd_LCD(unsigned char c, char cd);
-void inic_LCD_4bits();		
+void inic_LCD_4bits();    
 void escreve_LCD(char *c);
 void escreve_LCD_Flash(const char *c);
 void ident_num(unsigned int valor, unsigned char *disp);
@@ -39,12 +39,10 @@ void ident_num(unsigned int valor, unsigned char *disp);
 unsigned long cliquePC2 = 0;
 unsigned long cliquePC3 = 0;
 unsigned long cliquePC4 = 0;
-unsigned long cliquePC5 = 0;
 
 char last_statePC2 = (1 << PC2);
 char last_statePC3 = (1 << PC3);
 char last_statePC4 = (1 << PC4);
-char last_statePC5 = (1 << PC5);
 
 volatile unsigned long my_millis = 0;
 unsigned long tempo_troca;
@@ -98,8 +96,8 @@ int main()
   DDRB = 1 << PB0 | 1 << PB1;
   DDRC = 1 << PC1;
 
-  DDRC &= ~(1 << PC2 | 1 << PC3 | 1 << PC4 | 1 << PC5);
-  PORTC |= (1 << PC2 | 1 << PC3 | 1 << PC4 | 1 << PC5);
+  DDRC &= ~((1 << PC2) | (1 << PC3) | (1 << PC4));
+  PORTC |= ((1 << PC2) | (1 << PC3) | (1 << PC4));
 
   sei();
 
@@ -163,60 +161,57 @@ int main()
     if (estado <= 2)
     {
       char leituraPC2 = PINC & (1 << PC2);
-      if (leituraPC2 == 0 && last_statePC2 != 0 && (my_millis - cliquePC2) > 150)
+      if (leituraPC2 != last_statePC2 && (my_millis - cliquePC2) > 10)
       {
-        cliquePC2 = my_millis;
-        BEEP();
-        if (tempo[estado] > 300000UL) {
-          tempo[estado] -= 300000UL; 
-        } else if (tempo[estado] == 300000UL) {
-          tempo[estado] = 10000UL; 
-        } else {
-          tempo[estado] = 10000UL; 
+        cliquePC2 = my_millis; 
+        if (leituraPC2 == 0)
+        {
+          BEEP();
+          if (tempo[estado] > 300000UL) {
+            tempo[estado] -= 300000UL; 
+          } else if (tempo[estado] == 300000UL) {
+            tempo[estado] = 10000UL; 
+          } else {
+            tempo[estado] = 10000UL; 
+          }
         }
       }
       last_statePC2 = leituraPC2;
 
       char leituraPC3 = PINC & (1 << PC3);
-      if (leituraPC3 == 0 && last_statePC3 != 0 && (my_millis - cliquePC3) > 150)
+      if (leituraPC3 != last_statePC3 && (my_millis - cliquePC3) > 10)
       {
         cliquePC3 = my_millis;
-        BEEP();
-        if (tempo[estado] == 10000UL) {
-          tempo[estado] = 300000UL; 
-        } else {
-          tempo[estado] += 300000UL; 
+        if (leituraPC3 == 0)
+        {
+          BEEP();
+          if (tempo[estado] == 10000UL) {
+            tempo[estado] = 300000UL; 
+          } else {
+            tempo[estado] += 300000UL; 
+          }
         }
       }
       last_statePC3 = leituraPC3;
 
       char leituraPC4 = PINC & (1 << PC4);
-      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 150)
+      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 10)
       {
         cliquePC4 = my_millis;
-        BEEP();
-        estado = estado + 1;
-        if (estado == 3)
+        if (leituraPC4 == 0)
         {
-          tempo_troca = my_millis + tempo[0];
-          MOTORON;
-          cmd_LCD(0x80, 0);
-          escreve_LCD((char*)"Sovando  ");
+          BEEP();
+          estado = estado + 1;
+          if (estado == 3)
+          {
+            tempo_troca = my_millis + tempo[0];
+            MOTORON;
+            cmd_LCD(0x80, 0);
+            escreve_LCD((char*)"Sovando  ");
+          }
         }
       }
       last_statePC4 = leituraPC4;
-
-      char leituraPC5 = PINC & (1 << PC5);
-      if (estado != 0)
-      {
-        if (leituraPC5 == 0 && last_statePC5 != 0 && (my_millis - cliquePC5) > 150)
-        {
-          cliquePC5 = my_millis;
-          BEEP();
-          estado = estado - 1;
-        }
-      }
-      last_statePC5 = leituraPC5;
     }
 
     if (estado == 3)
@@ -258,13 +253,16 @@ int main()
     if (estado == 6)
     {
       char leituraPC4 = PINC & (1 << PC4);
-      if (leituraPC4 == 0 && last_statePC4 != 0 && (my_millis - cliquePC4) > 150)
+      if (leituraPC4 != last_statePC4 && (my_millis - cliquePC4) > 10)
       {
         cliquePC4 = my_millis;
-        estado = 0;
-        
-        tempo_ultimo_refresh_lcd = my_millis - 200;
-        tempo_ultima_checagem = my_millis - 1000;
+        if (leituraPC4 == 0)
+        {
+          estado = 0;
+          
+          tempo_ultimo_refresh_lcd = my_millis - 200;
+          tempo_ultima_checagem = my_millis - 1000;
+        }
       }
       last_statePC4 = leituraPC4;
     }
@@ -276,7 +274,7 @@ int main()
       if (estado != 6) 
       {
         cmd_LCD(0xC0, 0);
-        escreve_LCD((char*)"Temp: 67");
+        escreve_LCD((char*)"Temp:      67");
         cmd_LCD(0xDF, 1); 
         cmd_LCD('C', 1);
         escreve_LCD((char*)"      "); 
